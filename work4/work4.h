@@ -8,16 +8,18 @@
 #include <stdlib.h>
 #include <fstream>
 #include <math.h>
+#include <algorithm>
 #define input "input.txt"
 #define output "output.txt"
 #define OX 500
 #define OY 500
 #define ndebug
-int FURY;//!!!!!
+int FURY=1;//!!!!!
 using  std::string;
 using  std::wstring;
 using namespace std;
 string strs[60];
+string patch[3];
 int n;
 ifstream fin(input);
 FILE * fout = fopen(output,"w");
@@ -26,29 +28,10 @@ bool visited[60];
 set<int> alphabet[26];
 int minx,miny,maxx,maxy;
 int sum=0;
-char a[1000][1000];
-void transferv()
-{
-    int i,j,tmp;
-    for (i=minx;i<maxx;i++)
-    {
-        for (j=miny;j<(miny+maxy)/2;j++)
-        {
-            tmp = a[i][maxy-j+miny];a[i][maxy-j+miny]=a[i][j];a[i][j]=tmp;
-        }
-    }
-}
-void transferh()
-{
-    int i,j,tmp;
-    for (i=miny;i<maxy;i++)
-    {
-        for (j=minx;j<(minx+maxx)/2;j++)
-        {
-            tmp = a[maxx-j+minx][i];a[maxx-j+minx][i]=a[j][i];a[j][i]=tmp;
-        }
-    }
-}
+char a[1000][1000],ta[1000][1000];
+int Tolerance=3;
+bool untrim;
+string pattern,sample;
 string reverse(string sample)
 {
     string tmp;
@@ -59,6 +42,7 @@ string reverse(string sample)
 string trim(string sample)
 {
     int t;
+    if (untrim) return sample;
     t = 0;
     while(sample[t]==' '){t++;}
     sample = sample.erase(0,t);
@@ -67,18 +51,19 @@ string trim(string sample)
     sample = sample.erase(sample.length()-t,t);
     return sample;
 }
-int compare (string pattern,string ith)
+int compare(string pattern,string ith)
 {
-    int i,now = 0;
+    int i,now = 0,l;
     int start=-1;
-    if (ith.length()<=FURY){return -1;}
-    for (i=0;i<pattern.length();i++)
+    l = (int)(ith.length());
+    if (l<=1){return -1;}
+    for (i=0;i<l;i++)
     {
         if (pattern[i]==ith[now]||ith[i]==' ')
         {
             now++;
             if (now==1){start=i;}
-            if (now==ith.length()){return start;}
+            if (now==l){return start;}
         }
         else{now=0;}
     }
@@ -91,12 +76,142 @@ void ExpandArea(int x,int y,int z,int w)
     if (min(y,w)<miny) {miny = min(y,w);}
     if (max(y,w)>maxy) {maxy = max(y,w);}
 }
-void plot()
+bool whether_ExpandArea(int x,int y,int z,int w)
+{
+    if (min(x,z)<minx-Tolerance) {return false;}
+    if (max(x,z)>maxx+Tolerance) {return false;}
+    if (min(y,w)<miny-Tolerance) {return false;}
+    if (max(y,w)>maxy+Tolerance) {return false;}
+    ExpandArea(x,y,z,w);
+    return true;
+}
+void printG()
+{
+    int i,j;
+    for (i=minx;i<=maxx;i++)
+    {
+        for(j=miny;j<=maxy;j++)
+        {
+            if (a[i][j]!=' ')cout<<a[i][j];
+            else cout<<'-';
+        }
+        cout<<endl;
+    }
+    cout<<endl;
+}
+bool Estimate_And_Paint(int x,int y,int z,int w,string s)
+{
+    int i,j,vx,vy;
+    vx=(z-x)/((int)s.length()-1);
+    vy=(w-y)/((int)s.length()-1);
+    if (whether_ExpandArea(x,y,z,w))
+    {
+        sum++;
+        for (i=0;i<s.length();i++)
+        {
+            if  (a[x+i*vx][y+i*vy] != s[i]&&a[x+i*vx][y+i*vy]!=' ')
+            {
+                printG();
+                cout<<x-minx<<' '<<y-miny<<' '<<a[x][y]<<endl;
+                cout<<s<<endl;
+                system("pause");
+            }
+            a[x+i*vx][y+i*vy] = s[i];
+        }
+    }
+    return whether_ExpandArea(x,y,z,w);
+}
+void Transv()
+{
+    int i,j,tmp;
+    for (i=minx;i<=maxx;i++)
+    {
+        for (j=miny;j<(miny+maxy)/2;j++)
+        {
+            tmp= a[i][j];a[i][j]=a[i][miny+maxy-j];a[i][miny+maxy-j]=tmp;
+        }
+    }
+}
+void Transh()
+{
+    int i,j,tmp;
+    for (i=miny;i<=maxy;i++)
+    {
+        for (j=minx;j<(minx+maxx)/2;j++)
+        {
+            tmp= a[j][i];a[j][i]=a[minx+maxx-j][i];a[minx+maxx-j][i]=tmp;
+        }
+    }
+}
+void Twist()
+{
+    int i,j,tmp;
+    for (i=minx;i<=maxx;i++)
+    {
+        for (j=miny;j<=maxy;j++)
+        {
+            ta[i][j] = a[i][j];
+            a[i][j] = ' ';
+        }
+    }
+    for (j=0;j<=999;j++)
+    {
+        for (i=0;i<=999;i++)
+        {
+            if (i>=minx&&i<=maxx&&j>=miny&&j<=maxy)
+            {a[j][i] = ta[i][j];}
+        }
+    }
+    tmp =maxx;maxx=maxy;maxy=tmp;
+    tmp =minx;minx=miny;miny=tmp;
+}
+void lap()
+{
+    int i,j,k,left,right;
+    for (i=minx;i<=maxx;i++)
+    {
+        left = -1;right = -1;
+        for (j=miny;j<=maxy;j++)
+        {
+            if (a[i][j]!=' '&&left == -1){left = j;}
+            if (a[i][j]!=' ') {right = j;}
+        }
+        if (left!=-1)
+        {
+            for (k=0;k<n;k++)
+            {
+                if (visited[k]) continue;
+                if (strs[k][0]==a[i][left])
+                {
+                    if (Estimate_And_Paint(i,left,i,left-strs[k].length()+1,strs[k])) {visited[k]=true;break;}
+                }
+                if (strs[k][strs[k].length()-1]==a[i][left])
+                {
+                    if (Estimate_And_Paint(i,left,i,left-strs[k].length()+1,reverse(strs[k]))) {visited[k]=true;break;}
+                }
+            }
+        }
+        if (right!=-1)
+        {
+            for (k=0;k<n;k++)
+            {
+                if (visited[k]) continue;
+                if (strs[k][0]==a[i][right])
+                {
+                    if (Estimate_And_Paint(i,right,i,right+strs[k].length()-1,strs[k])) {visited[k]=true;break;}
+                }
+                if (strs[k][strs[k].length()-1]==a[i][right])
+                {
+                    if (Estimate_And_Paint(i,right,i,right+strs[k].length()-1,reverse(strs[k]))) {visited[k]=true;break;}
+                }
+            }
+        }
+    }
+}
+void reinforce()
 {
     int i,j,k,crux,product;
-    memset(visited,0,60*sizeof(bool));
     visited[core]=true;
-    //FURY=1;//!!!!
     for (i=0;i<1000;i++)
     {
         for (j=0;j<1000;j++)
@@ -112,7 +227,8 @@ void plot()
     {
         a[OX+i][OY]=strs[core][i];
         if (skeleton[i]==-1) {continue;}
-        visited[i]=true;
+        if (visited[skeleton[i]]){system("pause");}
+        visited[skeleton[i]]=true;
         crux = 0;product = 1000000;
         for (j=0;j<strs[skeleton[i]].length();j++)
         {
@@ -132,12 +248,13 @@ void plot()
             ExpandArea(OX+i+j-crux,OY+j-crux,OX+i+j-crux,OY+j-crux);
         }
     }
-
+}
+void plot()
+{
     //extend diag
-
-    string sample,pattern,t;
+    int i,j,k;
+    string t;
     int start,pos,shift;
-
     for (i=minx;i<=maxx;i++)
     {
         sample = "";
@@ -146,133 +263,34 @@ void plot()
             sample.append(1,a[i+maxy-j][j]);
         }
         sample = trim(sample);
+        bool letgo=false;
         for (j=0;j<n;j++)
         {
-            if (visited[j]) {continue;}
+            if (letgo) {break;}
             pattern = strs[j];
-            pos = compare(pattern,sample);
-            if (pos>=0)
+            for (int twice=0;twice<=1;twice++)
             {
-                for (k=maxy;k>=max(miny,maxy-(maxx-i));k--)
+                if (visited[j]) {continue;}
+                pos = compare(pattern,sample);
+                if (pos>=0)
                 {
-                    if (a[i+maxy-k][k]!=' '){shift = k;break;}
+                    for (k=maxy;k>=max(miny,maxy-(maxx-i));k--)
+                    {
+                        if (a[i+maxy-k][k]!=' '){shift = k;break;}
+                    }
+                    shift =untrim?0:maxy-shift;
+                    if(Estimate_And_Paint(i-pos+shift,
+                    maxy+pos-shift,
+                    i-pos+pattern.length()-1+shift,maxy+pos-pattern.length()+1-shift,pattern)) {visited[j]=true;};
+                    letgo=true;
+                    break;
                 }
-                shift = maxy-shift;
-                for (k=0;k<pattern.length();k++)
-                {
-                    a[i-pos+k+shift][maxy+pos-k-shift] = pattern[k];
-                }
-                ExpandArea(i-pos+k-1+shift,maxy+pos-k+1-shift,i-pos+shift,maxy+pos-shift);
-                visited[j]=true;
-                sum++;
-                break;
-            }
-            pattern = reverse(strs[j]);
-            pos = compare(pattern,sample);
-            if (pos>=0)
-            {
-                for (k=maxy;k>=max(miny,maxy-(maxx-i));k--)
-                {
-                    if (a[i+maxy-k][k]!=' '){shift = k;break;}
-                }
-                shift = maxy-shift;
-                for (k=0;k<pattern.length();k++)
-                {
-                    a[i-pos+k+shift][maxy+pos-k-shift] = pattern[k];
-                }
-                ExpandArea(i-pos+k-1+shift,maxy+pos-k+1-shift,i-pos+shift,maxy+pos-shift);
-                sum++;
-                visited[j]=true;
-                break;
-            }
-
-        }
-    }
-
-
-#ifndef ndebug
-    for (i=minx;i<=maxx;i++)
-    {
-        for (j=miny;j<=maxy;j++)
-        {
-            if (a[i][j]!=' ')
-            {
-                cout<<a[i][j];
-            }
-            else {cout<<'-';}
-        }string sample(""),pattern;
-        cout<<endl;
-    }
-    cout<<sum<<endl;
-#endif // ndebug    //extend vertical
-
-    for (i=miny;i<=maxy;i++)
-    {
-        sample = "";
-        for (j=minx;j<=maxx;j++)
-        {
-            sample.append(1,a[j][i]);
-        }
-        sample = trim(sample);
-        for (j=0;j<n;j++)
-        {
-            if (visited[j]) {continue;}
-            pattern = strs[j];
-            pos = compare(pattern,sample);
-            if (pos>=0)
-            {
-                for (k=minx;k<=maxx;k++)
-                {
-                    if (a[k][i]!=' '){shift = k;break;}
-                }
-                shift = shift-minx;
-                for (k=0;k<pattern.length();k++)
-                {
-                    a[minx+k-pos+shift][i]=pattern[k];
-                }
-                ExpandArea(minx+k-1-pos+shift,i,minx-pos+shift,i);
-                sum++;
-                visited[j]=true;
-                break;
-            }
-            pattern = reverse(strs[j]);
-            pos = compare(pattern,sample);
-            if (pos>=0)
-            {
-                for (k=minx;k<=maxx;k++)
-                {
-                    if (a[k][i]!=' '){shift = k;break;}
-                }
-                shift = shift-minx;
-                for (k=0;k<pattern.length();k++)
-                {
-                    a[minx+k-pos+shift][i]=pattern[k];
-                }
-                ExpandArea(minx+k-1-pos+shift,i,minx-pos+shift,i);
-                sum++;
-                visited[j]=true;
-                break;
+                pattern = reverse(strs[j]);
             }
         }
     }
-
-#ifndef ndebug
-    for (i=minx;i<=maxx;i++)
-    {
-        for (j=miny;j<=maxy;j++)
-        {
-            if (a[i][j]!=' ')
-            {
-                cout<<a[i][j];
-            }
-            else {cout<<'-';}
-        }string sample(""),pattern;
-        cout<<endl;
-    }
-    cout<<sum<<endl;
-#endif // ndebug
     //extend horizontal
-    FURY = 0;//!!!
+    Tolerance=1;
     for (i=minx;i<=maxx;i++)
     {
         sample = "";
@@ -281,114 +299,68 @@ void plot()
             sample.append(1,a[i][j]);
         }
         sample = trim(sample);
+        bool letgo=false;
         for (j=0;j<n;j++)
         {
-            if (visited[j]) {continue;}
             pattern = strs[j];
-            pos = compare(pattern,sample);
-            if (pos>=0)
+            if (letgo) break;
+            for (int twice=0;twice<=1;twice++)
             {
-                for (k=minx;k<=maxx;k++)
+                if (visited[j]) {continue;}
+                pos = compare(pattern,sample);
+                if (pos>=0)
                 {
-                    if (a[i][k]!=' '){shift = k;break;}
-                }
-                shift = shift-miny;
-                for (k=0;k<pattern.length();k++)
-                {
-                    a[i][miny+k+shift-pos]=pattern[k];
-                }
-                ExpandArea(i,miny+k-1+shift-pos,i,miny+shift-pos);
-                sum++;
-                visited[j]=true;
-                break;
-            }
-            pattern = reverse(strs[j]);
-            pos = compare(pattern,sample);
-            if (pos>=0)
-            {
-                for (k=minx;k<=maxx;k++)
-                {
-                    if (a[i][k]!=' '){shift = k;break;}
-                }
-                shift = shift-miny;
-                for (k=0;k<pattern.length();k++)
-                {
-                    a[i][miny+k+shift-pos]=pattern[k];
-                }
-                ExpandArea(i,miny+k-1+shift-pos,i,miny+shift-pos);
-                sum++;
-                visited[j]=true;
-                break;
-            }
-        }
-    }
-
-#ifndef ndebug
-    for (i=minx;i<=maxx;i++)
-    {
-        for (j=miny;j<=maxy;j++)
-        {
-            if (a[i][j]!=' ')
-            {
-                cout<<a[i][j];
-            }
-            else {cout<<'-';}
-        }string sample(""),pattern;
-        cout<<endl;
-    }
-    cout<<sum<<endl;
-#endif // ndebug
-    set<int>::iterator index;
-    maxx+=2;miny-=2;
-    for (i=minx;i<=maxx;i++)
-    {
-        for(j=maxy;j>=miny;j--)
-        {
-            if (a[i][j]!=' ')
-            {
-                for (index = alphabet[a[i][j]-65].begin();index != alphabet[a[i][j]-65].end();index++)
-                {
-                    if (visited[*index]) {continue;}
-                    if (strs[*index][0]!=a[i][j]&&strs[*index][strs[*index].length()-1]!=a[i][j]) {continue;}
-                    if (i-minx<=strs[*index].length()&&maxy-j<=strs[*index].length()) {continue;}
-                    sum++;visited[*index] = true;
+                    for (k=miny;k<=maxy;k++)
+                    {
+                        if (a[i][k]!=' '){shift = k;break;}
+                    }
+                    shift =untrim?0:shift-miny;
+                    if (Estimate_And_Paint(i,miny+shift-pos,i,miny+pattern.length()-1+shift-pos,pattern))  {visited[j]=true;};
+                    letgo=true;
                     break;
                 }
-                sample = strs[*index];
-                if (index==alphabet[a[i][j]-65].end()) {break;}
-                if ((i-minx)>(maxy-j))
-                {
-                    for (k=0;k<sample.length();k++)
-                    {
-                        a[i+k][j] = sample[k];
-                    }
-                }
-                else
-                {
-                    for (k=0;k<sample.length();k++)
-                    {
-                        a[i][j-k] = sample[k];
-                    }
-                }
+                pattern = reverse(strs[j]);
             }
         }
     }
-#ifndef ndebug
-    for (i=minx;i<=maxx;i++)
+    //extend vertical
+    for (i=miny;i<=maxy;i++)
     {
-        for (j=miny;j<=maxy;j++)
+        sample = "";
+        for (j=minx;j<=maxx;j++)
         {
-            if (a[i][j]!=' ')
+            sample.append(1,a[j][i]);
+        }
+        sample = trim(sample);
+        bool letgo=false;
+        for (j=0;j<n;j++)
+        {
+            pattern = strs[j];
+            if (letgo) break;
+            for (int twice=0;twice<=1;twice++)
             {
-                cout<<a[i][j];
+                if (visited[j]) {continue;}
+                pos = compare(pattern,sample);
+                if (pos>=0)
+                {
+                    for (k=minx;k<=maxx;k++)
+                    {
+                        if (a[k][i]!=' '){shift = k;break;}
+                    }
+                    shift =untrim?0:shift-minx;
+                    if (Estimate_And_Paint(minx+shift-pos,i,minx+pattern.length()-1+shift-pos,i,pattern))  {visited[j]=true;};
+                    letgo=true;
+                    break;
+                }
+                pattern = reverse(strs[j]);
             }
-            else {cout<<'-';}
-        }string sample(""),pattern;
-        cout<<endl;
+        }
     }
-    cout<<sum<<endl;
-#endif // ndebug
-
+    //printG();
+}
+int ToUpper(int c)
+{
+    return toupper(c);
 }
 
 void init()
@@ -397,7 +369,7 @@ void init()
     string tmp;
     srand((int)time(0));
     fin>>n;
-    for (i=0;i!=n;i++){fin>>strs[i];}
+    for (i=0;i!=n;i++){fin>>strs[i];transform(strs[i].begin(), strs[i].end(), strs[i].begin(), ToUpper);}
     for (i=0;i!=n;i++)
     {
         randomi = rand()%n;
@@ -421,9 +393,16 @@ void set_skeleton()
     bool chosen[60];
     set<int>::iterator index;
     int tmpskeleton[60];
+    memset(visited,0,60*sizeof(bool));
+    for (i=0;i<3;i++)
+    {
+        patch[i] = strs[n-1-i];
+        visited[n-1-i] = true;
+    }
     srand((int)time(0));
     for (i=0;i<n;i++)
     {
+        if (visited[i]) {continue;}
         tmpsum=0;
         for (j=0;j<n;j++) {chosen[j]=false;tmpskeleton[j]=-1;}
         chosen[i] = true;
@@ -431,7 +410,7 @@ void set_skeleton()
         {
             for (index = alphabet[strs[i][j]-65].begin();index != alphabet[strs[i][j]-65].end();index++)
             {
-                if (chosen[*index]) {continue;}
+                if (chosen[*index]||visited[*index]) {continue;}
                 chosen[*index] = true;
                 tmpskeleton[j] = *index;
                 tmpsum++;
@@ -439,19 +418,41 @@ void set_skeleton()
             }
         }
         seed = rand()%n/2;
-        if (tmpsum+seed>maxestimation) {for (j=0;j<n;j++) {maxestimation=tmpsum+seed;core=i;skeleton[j]=tmpskeleton[j];sum=tmpsum;}}
+        if (tmpsum+seed>maxestimation) {for (j=0;j<n;j++) {maxestimation=tmpsum+seed;core=i;skeleton[j]=tmpskeleton[j];sum=tmpsum+1;}}
     }
 }
-void deal(char *oa,int *ominx,int *ominy,int *omaxx,int *omaxy,int *osum,bool *ovisited)
+
+bool check()
+{
+    if (a[minx][miny]==' '&&a[minx][maxy]==' '&&a[maxx][miny]==' '&&a[maxx][maxy]==' ')
+    {
+        return false;
+    }
+    if (((maxx-minx)-(maxy-miny))*((maxx-minx)-(maxy-miny))>=4) return false;
+    Tolerance = 0;
+    untrim = 1;
+    plot();
+    if (sum!=n-3) return false;
+    return true;
+}
+void deal(char *oa,int *ominx,int *ominy,int *omaxx,int *omaxy,int *osum,string &s1,string &s2,string &s3)
 {
     init();
     set_skeleton();
-    plot();
+    reinforce();
+    untrim=0;
+    Tolerance=3;plot();Tolerance=2;lap();Twist();lap();
+    Tolerance=2;plot();Tolerance=1;lap();Twist();lap();
+    untrim=1;
+    Tolerance=1;plot();Tolerance=2;lap();Twist();lap();
+    untrim=0;
     int i,j;
     int x,y,x0,y0,sqrt,sqrt0;
     x=maxx-minx;y=maxy-miny;sqrt=(x-y)*(x-y);
     x0=*omaxx-*ominx;y0=*omaxy-*ominy;sqrt0=(x0-y0)*(x0-y0);
-    if (sum-x/3-y/3-sqrt<=*osum-x0/3-y0/3-sqrt0) return;
+    if (!check()) return;
+    if (sum-x/2-y/2-sqrt<=sum-x0/2-y0/2-sqrt0) return;
+    s1 = strs[n-1];s2 = strs[n-2];s3 = strs[n-3];
     for (i=minx;i<=maxx;i++)
     {
         for (j=miny;j<=maxy;j++)
@@ -464,6 +465,5 @@ void deal(char *oa,int *ominx,int *ominy,int *omaxx,int *omaxy,int *osum,bool *o
     *omaxx=maxx;
     *omaxy=maxy;
     *osum =sum;
-    for (i=0;i<60;i++) {ovisited[i]=visited[i];}
 }
 
